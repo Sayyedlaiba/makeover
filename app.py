@@ -1,97 +1,191 @@
 import streamlit as st
+import base64
+import os
 
-# Set up page configuration
-st.set_page_config(page_title="✨ Doll Glow-Up Salon ✨", layout="centered")
+# --- PAGE SETUP ---
+st.set_page_config(page_title="Dynamic Doll Glow-Up", layout="wide")
 
-# Initialize game state variables if they don't exist
-if "stage" not in st.session_state:
-    st.session_state.stage = "intro"
-if "washed_percentage" not in st.session_state:
-    st.session_state.washed_percentage = 0
-if "makeup_applied" not in st.session_state:
-    st.session_state.makeup_applied = {"Lipstick": False, "Blush": False, "Eyeshadow": False}
+# --- UTILITY: Dynamic Image Loading ---
+def get_image_base64(path):
+    """Encodes a local image to base64 for embedding in HTML."""
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
-# Title and Styling
-st.title("✨ Doll Glow-Up Salon ✨")
+def render_dynamic_stage(base_path, overlay_path, base_opacity, overlay_opacity):
+    """
+    Renders two images stacked dynamically using CSS.
+    Requires base_messy.png, base_clean.png, 
+    lipstick_layer.png, and eyeshadow_layer.png in the same directory.
+    """
+    base_data = get_image_base64(base_path)
+    overlay_data = get_image_base64(overlay_path)
+
+    if not base_data:
+        st.error(f"Missing required base image: {base_path}")
+        return
+
+    # Base HTML structure
+    html_content = f"""
+    <div class="glowup-container" style="position: relative; width: 100%; max-width: 600px; margin: auto;">
+        <img src="data:image/png;base64,{base_data}" 
+             class="doll-base" 
+             style="width: 100%; height: auto; display: block; 
+                    opacity: {base_opacity}; transition: opacity 0.5s ease;">
+    """
+
+    # Add Dynamic Overlay Layer (if available)
+    if overlay_data:
+        html_content += f"""
+        <img src="data:image/png;base64,{overlay_data}" 
+             class="doll-overlay" 
+             style="position: absolute; top: 0; left: 0; width: 100%; height: auto; 
+                    opacity: {overlay_opacity}; transition: opacity 0.5s ease; pointer-events: none;">
+        """
+    
+    html_content += "</div>"
+    st.components.v1.html(html_content, height=650)
+
+
+# --- INITIALIZE STATE ---
+if "game_stage" not in st.session_state:
+    st.session_state.game_stage = "welcome"
+if "clean_progress" not in st.session_state:
+    st.session_state.clean_progress = 0
+if "lipstick_on" not in st.session_state:
+    st.session_state.lipstick_on = False
+if "eyeshadow_on" not in st.session_state:
+    st.session_state.eyeshadow_on = False
+
+
+# --- TITLE & MAIN INTERFACE ---
+st.title("💖 Dynamic Doll Salon: The Glow-Up 💖")
+st.write("Washing and Makeup: Dynamic Edition!")
 st.markdown("---")
 
-# ---------------- STAGE 1: INTRO ----------------
-if st.session_state.stage == "intro":
-    st.subheader("Welcome to the Glamour Salon!")
-    st.write("Our doll needs a massive transformation. Let's start with a refreshing face wash!")
-    
-    # Placeholder for initial doll image
-    st.info("📸 [Imagine a messy/muddy doll face here]")
-    
-    if st.button("Start Makeover 🧴"):
-        st.session_state.stage = "wash"
-        st.rerun()
+col1, col2 = st.columns([1, 1])
 
-# ---------------- STAGE 2: WASH FACE ----------------
-elif st.session_state.stage == "wash":
-    st.subheader("Step 1: Clean the Doll's Face")
-    st.write("Click the scrub button to wash away the dirt!")
-    
-    # Progress bar simulates washing
-    progress = st.session_state.washed_percentage
-    st.progress(progress / 100)
-    st.write(f"Cleanliness: {progress}%")
-    
-    # Visual feedback based on progress
-    if progress < 50:
-        st.warning("🧼 Scrubbing in progress... still a bit dirty!")
-    elif progress < 100:
-        st.info("✨ Getting cleaner! Almost there.")
-    else:
-        st.success("💖 Perfectly clean! Ready for makeup.")
+# --- DISPLAY AREA (LEFT COLUMN) ---
+with col1:
+    st.subheader("Your Doll")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Scrub Face 🧽", disabled=(progress >= 100)):
-            st.session_state.washed_percentage += 25
-            st.rerun()
+    # STAGE: WELCOME/MESSY
+    if st.session_state.game_stage == "welcome":
+        render_dynamic_stage("base_messy.png", None, 1.0, 0.0)
+    
+    # STAGE: WASHING (Opacity Blend)
+    elif st.session_state.game_stage == "washing":
+        # Dynamic Opacity: As progress increases, clean face shows more, messy face shows less.
+        clean_opacity = st.session_state.clean_progress / 100.0
+        messy_opacity = 1.0 - clean_opacity
+        render_dynamic_stage("base_clean.png", "base_messy.png", clean_opacity, messy_opacity)
+        
+    # STAGE: MAKEUP (Overlay Blend)
+    elif st.session_state.game_stage == "makeup":
+        # We start with the clean face as the base.
+        # Then, we decide which makeup layer to dynamically display based on state.
+        
+        selected_layer = None
+        layer_opacity = 0.0
+
+        if st.session_state.lipstick_on:
+            selected_layer = "lipstick_layer.png"
+            layer_opacity = 1.0
+        elif st.session_state.eyeshadow_on:
+            selected_layer = "eyeshadow_layer.png"
+            layer_opacity = 1.0
             
-    with col2:
-        if st.button("Proceed to Makeup 💄", disabled=(progress < 100)):
-            st.session_state.stage = "makeup"
+        render_dynamic_stage("base_clean.png", selected_layer, 1.0, layer_opacity)
+        
+    # STAGE: REVEAL (Final Clean State)
+    elif st.session_state.game_stage == "reveal":
+        render_dynamic_stage("base_clean.png", None, 1.0, 0.0)
+
+
+# --- CONTROL AREA (RIGHT COLUMN) ---
+with col2:
+    st.subheader("Salon Controls")
+
+    # CONTROLS: WELCOME
+    if st.session_state.game_stage == "welcome":
+        st.write("A new client has arrived, and she's a mess! Time to get to work.")
+        if st.button("Begin Deep Clean ✨"):
+            st.session_state.game_stage = "washing"
             st.rerun()
 
-# ---------------- STAGE 3: MAKEUP ----------------
-elif st.session_state.stage == "makeup":
-    st.subheader("Step 2: Time for Glamour!")
-    st.write("Select the cosmetics to apply to the doll's face:")
+    # CONTROLS: WASHING
+    elif st.session_state.game_stage == "washing":
+        st.write("Click below to scrub the dirt away!")
+        
+        # Progress visualizer
+        current_clean = st.session_state.clean_progress
+        st.progress(current_clean / 100)
+        st.write(f"Dirt Removed: {current_clean}%")
 
-    # Checkboxes or buttons for makeup elements
-    lip = st.checkbox("Apply Pink Lipstick 💄", value=st.session_state.makeup_applied["Lipstick"])
-    blush = st.checkbox("Apply Rosy Blush 🎨", value=st.session_state.makeup_applied["Blush"])
-    eye = st.checkbox("Apply Sparkly Eyeshadow 👀", value=st.session_state.makeup_applied["Eyeshadow"])
-    
-    # Update state based on user input
-    st.session_state.makeup_applied["Lipstick"] = lip
-    st.session_state.makeup_applied["Blush"] = blush
-    st.session_state.makeup_applied["Eyeshadow"] = eye
+        if st.button("Scrub Face 🧽", disabled=(current_clean >= 100)):
+            # Dynamic Step update
+            st.session_state.clean_progress += 25 
+            if st.session_state.clean_progress >= 100:
+                st.session_state.clean_progress = 100
+            st.rerun()
 
-    # Dynamic image text simulation
-    applied_features = [k for k, v in st.session_state.makeup_applied.items() if v]
-    st.info(f"📸 Current Doll Face Status: Clean + {', '.join(applied_features) if applied_features else 'No Makeup Yet'}")
+        if current_clean == 100:
+            st.success("Face is perfectly clean!")
+            if st.button("Proceed to Makeup 💄"):
+                st.session_state.game_stage = "makeup"
+                st.rerun()
 
-    if st.button("Reveal Final Look 🎉"):
-        st.session_state.stage = "reveal"
-        st.rerun()
+    # CONTROLS: MAKEUP
+    elif st.session_state.game_stage == "makeup":
+        st.write("The canvas is clean. Apply the final touches!")
+        
+        # Note: We are only showing one makeup option at a time in this simple dynamic version.
+        
+        st.info("Dynamic Lip Option:")
+        if st.checkbox("Apply Pink Lipstick 💄", value=st.session_state.lipstick_on):
+            st.session_state.lipstick_on = True
+            st.session_state.eyeshadow_on = False # Single select for demonstration
+            st.rerun()
+        else:
+            if st.session_state.lipstick_on: # If was true and user unchecked
+                st.session_state.lipstick_on = False
+                st.rerun()
 
-# ---------------- STAGE 4: REVEAL ----------------
-elif st.session_state.stage == "reveal":
-    st.subheader("👑 The Final Glow-Up! 👑")
-    st.write("You did an amazing job! Look at that transformation!")
-    
-    # Final state display
-    st.balloons()
-    st.success("🌟 Stunning! 🌟")
-    st.info("📸 [Imagine a beautiful, glowing doll face here with all your selected makeup!]")
-    
-    if st.button("Play Again 🔄"):
-        # Reset everything
-        st.session_state.stage = "intro"
-        st.session_state.washed_percentage = 0
-        st.session_state.makeup_applied = {"Lipstick": False, "Blush": False, "Eyeshadow": False}
-        st.rerun()
+        st.info("Dynamic Eye Option:")
+        if st.checkbox("Apply Sparkly Eyeshadow 👀", value=st.session_state.eyeshadow_on):
+            st.session_state.eyeshadow_on = True
+            st.session_state.lipstick_on = False # Single select for demonstration
+            st.rerun()
+        else:
+            if st.session_state.eyeshadow_on: # If was true and user unchecked
+                st.session_state.eyeshadow_on = False
+                st.rerun()
+
+        # Update text dynamically
+        applied = []
+        if st.session_state.lipstick_on: applied.append("Pink Lipstick")
+        if st.session_state.eyeshadow_on: applied.append("Blue Eyeshadow")
+        
+        st.write(f"Current Look: **{' + '.join(applied) if applied else 'Clean Face'}**")
+
+        if st.button("Finish Makeover 🎉"):
+            st.session_state.game_stage = "reveal"
+            st.rerun()
+
+    # CONTROLS: REVEAL
+    elif st.session_state.game_stage == "reveal":
+        st.success("What a stunning transformation!")
+        st.balloons()
+        
+        if st.button("Start New Appointment 🔄"):
+            # RESET STATE
+            st.session_state.game_stage = "welcome"
+            st.session_state.clean_progress = 0
+            st.session_state.lipstick_on = False
+            st.session_state.eyeshadow_on = False
+            st.rerun()
+
+st.markdown("---")
+st.caption("A dynamic Streamlit experiment by [Your Name/Github]")
