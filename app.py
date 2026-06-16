@@ -8,7 +8,8 @@ st.set_page_config(page_title="Dynamic Doll Glow-Up", layout="wide")
 # --- 2. UTILITY: Dynamic Image Loading & Overlaying ---
 def get_image_base64(path):
     """Encodes a local image to base64 for embedding in HTML."""
-    if not os.path.exists(path):
+    # FIX: Safely skip if no path is provided (like None)
+    if not path or not os.path.exists(path):
         return None
     with open(path, "rb") as f:
         data = f.read()
